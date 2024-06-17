@@ -1,5 +1,7 @@
 # shortlink
 
+[Описание архитектуры](arch/README.md)
+
 ```shell
-curl -X POST 
+curl -d '{"link": "https://www.google.com/"}' localhost:8080/new
 ```
