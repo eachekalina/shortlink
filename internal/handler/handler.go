@@ -2,6 +2,8 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
+	"github.com/eachekalina/shortlink/internal/errs"
 	"github.com/eachekalina/shortlink/internal/service"
 	"github.com/gorilla/mux"
 	"net/http"
@@ -49,6 +51,10 @@ func (h *Handler) HandleLink(w http.ResponseWriter, r *http.Request) {
 	path := mux.Vars(r)["path"]
 	link, err := h.s.GetLink(r.Context(), path)
 	if err != nil {
+		if errors.Is(err, errs.ErrNotFound) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
