@@ -17,7 +17,7 @@ type Generator interface {
 }
 
 type Cache interface {
-	PutLink(ctx context.Context, link model.ShortLink) error
+	PutLink(ctx context.Context, path string, link string) error
 	GetLink(ctx context.Context, path string) (string, error)
 }
 
@@ -50,7 +50,7 @@ func (s *Service) CreateShortLink(ctx context.Context, link string) (string, err
 	if err != nil {
 		return "", err
 	}
-	err = s.cache.PutLink(ctx, shortLink)
+	err = s.cache.PutLink(ctx, path, link)
 	if err != nil {
 		log.Printf("Failed to write the log: %v\n", err)
 	}
@@ -65,6 +65,10 @@ func (s *Service) GetLink(ctx context.Context, path string) (string, error) {
 	link, err := s.repo.GetLink(ctx, path)
 	if err != nil {
 		return "", err
+	}
+	err = s.cache.PutLink(ctx, path, link.Link)
+	if err != nil {
+		log.Printf("Failed to write the log: %v\n", err)
 	}
 	return link.Link, nil
 }
