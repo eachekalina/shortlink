@@ -5,11 +5,26 @@ services:
       - '5432:5432'
     environment:
       POSTGRES_PASSWORD: mysecretpassword
+    healthcheck:
+      test: pg_isready -U postgres
+      interval: 5s
+
+  migrate:
+    image: migrate/migrate
+    volumes:
+      - './migrations:/migrations'
+    command: [ '-path', '/migrations', '-database', 'postgres://postgres:mysecretpassword@postgres:5432/postgres?sslmode=disable', 'up' ]
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   redis:
     image: redis:7-alpine
     ports:
       - '6379:6379'
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
 
   shortlink:
     build: .
@@ -20,3 +35,8 @@ services:
       REDIS_ADDR: redis:6379
       ROOT_URL: http://localhost:8080
       LISTEN_ADDR: ':8080'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
