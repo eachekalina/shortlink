@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"github.com/eachekalina/shortlink/internal/cache"
 	"github.com/eachekalina/shortlink/internal/handler"
 	"github.com/eachekalina/shortlink/internal/pathgen"
@@ -10,17 +11,20 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"time"
 )
 
 func main() {
-	pool, err := pgxpool.New(context.Background(), os.Getenv("DATABASE_URL"))
+	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
+
+	pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
 	if err != nil {
-		log.Println(err)
+		slog.Error("failed to connect to database", "err", err)
 		return
 	}
 	defer pool.Close()
@@ -28,7 +32,7 @@ func main() {
 	gen := pathgen.NewGenerator(12)
 	rootURL, err := url.Parse(os.Getenv("ROOT_URL"))
 	if err != nil {
-		log.Println(err)
+		slog.Error("invalid root URL", "err", err)
 		return
 	}
 
@@ -45,5 +49,28 @@ func main() {
 		Methods(http.MethodPost)
 	r.HandleFunc("/{path:[A-Za-z0-9\\-_]+}", h.HandleLink).
 		Methods(http.MethodGet)
-	http.ListenAndServe(os.Getenv("LISTEN_ADDR"), r)
+
+	serv := http.Server{
+		Addr:    os.Getenv("LISTEN_ADDR"),
+		Handler: r,
+	}
+
+	slog.Info("server is started", "addr", serv.Addr)
+
+	go func() {
+		err := serv.ListenAndServe()
+		if !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("server closed with an error", "err", err)
+		}
+	}()
+
+	<-ctx.Done()
+	slog.Info("shutting down server")
+
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelShutdown()
+	err = serv.Shutdown(shutdownCtx)
+	if err != nil {
+		slog.Error("server shutdown failed", "err", err)
+	}
 }

@@ -2,8 +2,9 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"github.com/eachekalina/shortlink/internal/model"
-	"log"
+	"log/slog"
 	"net/url"
 )
 
@@ -40,7 +41,7 @@ func New(repo Repository, gen Generator, cache Cache, rootURL *url.URL) *Service
 func (s *Service) CreateShortLink(ctx context.Context, link string) (string, error) {
 	path, err := s.gen.GeneratePath()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to generate path: %w", err)
 	}
 	shortLink := model.ShortLink{
 		Path: path,
@@ -48,11 +49,11 @@ func (s *Service) CreateShortLink(ctx context.Context, link string) (string, err
 	}
 	err = s.repo.CreateShortLink(ctx, shortLink)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create short link: %w", err)
 	}
 	err = s.cache.PutLink(ctx, path, link)
 	if err != nil {
-		log.Printf("Failed to write the log: %v\n", err)
+		slog.Warn("failed to write to cache", "path", path)
 	}
 	return s.rootURL.JoinPath(path).String(), nil
 }
@@ -64,11 +65,11 @@ func (s *Service) GetLink(ctx context.Context, path string) (string, error) {
 	}
 	link, err := s.repo.GetLink(ctx, path)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get the link: %w", err)
 	}
 	err = s.cache.PutLink(ctx, path, link.Link)
 	if err != nil {
-		log.Printf("Failed to write the log: %v\n", err)
+		slog.Warn("failed to write to cache", "path", path)
 	}
 	return link.Link, nil
 }
